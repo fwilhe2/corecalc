@@ -27,72 +27,81 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Corecalc.Funcalc {
-  /// <summary>
-  /// A CellsUsedInFunctions maps each function sheet cell to the
-  /// names of sheet-defined functions using that cell, and conversely,
-  /// maps each name of a sheet-defined function to the cells that 
-  /// function uses.  There should be a single instance, as a static field 
-  /// in class SdfManager.
-  /// </summary>
-  public class CellsUsedInFunctions {
-    public readonly Dictionary<FullCellAddr, HashSet<string>> addressToFunctionList
-      = new Dictionary<FullCellAddr, HashSet<string>>();
-    private readonly Dictionary<string, List<FullCellAddr>> functionToAddressList
-      = new Dictionary<string, List<FullCellAddr>>();
-    // Bags, because multiple sheet-defined functions may use the same cells as 
-    // input cell or as output cell
-    public readonly HashBag<FullCellAddr> 
-      inputCellBag = new HashBag<FullCellAddr>(), 
-      outputCellBag = new HashBag<FullCellAddr>();
+namespace Corecalc.Funcalc
+{
+    /// <summary>
+    /// A CellsUsedInFunctions maps each function sheet cell to the
+    /// names of sheet-defined functions using that cell, and conversely,
+    /// maps each name of a sheet-defined function to the cells that 
+    /// function uses.  There should be a single instance, as a static field 
+    /// in class SdfManager.
+    /// </summary>
+    public class CellsUsedInFunctions
+    {
+        public readonly Dictionary<FullCellAddr, HashSet<string>> addressToFunctionList
+          = new Dictionary<FullCellAddr, HashSet<string>>();
+        private readonly Dictionary<string, List<FullCellAddr>> functionToAddressList
+          = new Dictionary<string, List<FullCellAddr>>();
+        // Bags, because multiple sheet-defined functions may use the same cells as 
+        // input cell or as output cell
+        public readonly HashBag<FullCellAddr>
+          inputCellBag = new HashBag<FullCellAddr>(),
+          outputCellBag = new HashBag<FullCellAddr>();
 
-    public void Clear() {
-      addressToFunctionList.Clear();
-      functionToAddressList.Clear();
-      inputCellBag.Clear();
-      outputCellBag.Clear();
-    }
+        public void Clear()
+        {
+            addressToFunctionList.Clear();
+            functionToAddressList.Clear();
+            inputCellBag.Clear();
+            outputCellBag.Clear();
+        }
 
-    internal ICollection<string> GetFunctionsUsingAddresses(ICollection<FullCellAddr> fcas) {
-      ISet<string> affectedFunctions = new SortedSet<string>();
-      foreach (FullCellAddr fca in fcas) {
-        HashSet<string> names;
-        if (fca.sheet.IsFunctionSheet && addressToFunctionList.TryGetValue(fca, out names))
-          affectedFunctions.UnionWith(names);
-      }
-      return affectedFunctions;
-    }
+        internal ICollection<string> GetFunctionsUsingAddresses(ICollection<FullCellAddr> fcas)
+        {
+            ISet<string> affectedFunctions = new SortedSet<string>();
+            foreach (FullCellAddr fca in fcas)
+            {
+                HashSet<string> names;
+                if (fca.sheet.IsFunctionSheet && addressToFunctionList.TryGetValue(fca, out names))
+                    affectedFunctions.UnionWith(names);
+            }
+            return affectedFunctions;
+        }
 
-    internal void AddFunction(SdfInfo info, ICollection<FullCellAddr> addrs) {
-      HashSet<FullCellAddr> inputCellSet = new HashSet<FullCellAddr>();
-      inputCellSet.UnionWith(info.inputCells);
-      foreach (FullCellAddr addr in addrs)
-        if (!inputCellSet.Contains(addr))
-          AddCellToFunction(info.name, addr);
-      List<FullCellAddr> addrsList = new List<FullCellAddr>(addrs);
-      functionToAddressList[info.name] = addrsList;
-      inputCellBag.AddAll(info.inputCells);
-      outputCellBag.Add(info.outputCell);
-    }
+        internal void AddFunction(SdfInfo info, ICollection<FullCellAddr> addrs)
+        {
+            HashSet<FullCellAddr> inputCellSet = new HashSet<FullCellAddr>();
+            inputCellSet.UnionWith(info.inputCells);
+            foreach (FullCellAddr addr in addrs)
+                if (!inputCellSet.Contains(addr))
+                    AddCellToFunction(info.name, addr);
+            List<FullCellAddr> addrsList = new List<FullCellAddr>(addrs);
+            functionToAddressList[info.name] = addrsList;
+            inputCellBag.AddAll(info.inputCells);
+            outputCellBag.Add(info.outputCell);
+        }
 
-    internal void RemoveFunction(SdfInfo info) {
-      inputCellBag.RemoveAll(info.inputCells);
-      outputCellBag.Remove(info.outputCell);
-      List<FullCellAddr> addresses;
-      if (!functionToAddressList.TryGetValue(info.name, out addresses))
-        return;
-      foreach (FullCellAddr addr in addresses)
-        addressToFunctionList.Remove(addr);
-      functionToAddressList.Remove(info.name);
-    }
+        internal void RemoveFunction(SdfInfo info)
+        {
+            inputCellBag.RemoveAll(info.inputCells);
+            outputCellBag.Remove(info.outputCell);
+            List<FullCellAddr> addresses;
+            if (!functionToAddressList.TryGetValue(info.name, out addresses))
+                return;
+            foreach (FullCellAddr addr in addresses)
+                addressToFunctionList.Remove(addr);
+            functionToAddressList.Remove(info.name);
+        }
 
-    private void AddCellToFunction(String info, FullCellAddr addr) {
-      HashSet<String> names;
-      if (!addressToFunctionList.TryGetValue(addr, out names)) {
-        names = new HashSet<String>();
-        addressToFunctionList[addr] = names;
-      }
-      names.Add(info);
+        private void AddCellToFunction(String info, FullCellAddr addr)
+        {
+            HashSet<String> names;
+            if (!addressToFunctionList.TryGetValue(addr, out names))
+            {
+                names = new HashSet<String>();
+                addressToFunctionList[addr] = names;
+            }
+            names.Add(info);
+        }
     }
-  }
 }

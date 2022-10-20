@@ -29,196 +29,228 @@ using SC = System.Collections;
 using System.Collections.Generic;
 using Corecalc.Funcalc;
 
-namespace Corecalc {
-  /// <summary>
-  /// A Workbook is a collection of distinct named Sheets.
-  /// </summary>
-  public sealed class Workbook : IEnumerable<Sheet> {
-    public event Action<String[]> OnFunctionsAltered;
+namespace Corecalc
+{
+    /// <summary>
+    /// A Workbook is a collection of distinct named Sheets.
+    /// </summary>
+    public sealed class Workbook : IEnumerable<Sheet>
+    {
+        public event Action<String[]> OnFunctionsAltered;
 
-    private readonly List<Sheet> sheets            // All non-null and distinct
-      = new List<Sheet>();
-    public readonly Formats format                 // Formula formatting options
-      = new Formats();
+        private readonly List<Sheet> sheets            // All non-null and distinct
+          = new List<Sheet>();
+        public readonly Formats format                 // Formula formatting options
+          = new Formats();
 
-    // For managing recalculation of the workbook
-    public CyclicException Cyclic { get; private set; }  // Non-null if workbook has cycle
-    public uint RecalcCount { get; private set; }        // Number of recalculations done
-    public bool UseSupportSets { get; private set; }
-    private readonly List<FullCellAddr> editedCells 
-      = new List<FullCellAddr>();
-    private readonly HashSet<FullCellAddr> volatileCells
-      = new HashSet<FullCellAddr>();
-    private readonly Queue<FullCellAddr> awaitsEvaluation
-      = new Queue<FullCellAddr>();
+        // For managing recalculation of the workbook
+        public CyclicException Cyclic { get; private set; }  // Non-null if workbook has cycle
+        public uint RecalcCount { get; private set; }        // Number of recalculations done
+        public bool UseSupportSets { get; private set; }
+        private readonly List<FullCellAddr> editedCells
+          = new List<FullCellAddr>();
+        private readonly HashSet<FullCellAddr> volatileCells
+          = new HashSet<FullCellAddr>();
+        private readonly Queue<FullCellAddr> awaitsEvaluation
+          = new Queue<FullCellAddr>();
 
-    public Workbook() {
-      RecalcCount = 0;
-      UseSupportSets = false;
-      SdfManager.ResetTables();
-    }
-
-    public void AddSheet(Sheet sheet) {
-      sheets.Add(sheet);
-    }
-
-    public void RecordCellChange(int col, int row, Sheet sheet) {
-      editedCells.Add(new FullCellAddr(sheet, col, row));
-    }
-
-    public Sheet this[String name] {
-      get {
-        name = name.ToUpper();
-        foreach (Sheet sheet in sheets)
-          if (sheet.Name.ToUpper() == name)
-            return sheet;
-        return null;
-      }
-    }
-
-    public Sheet this[int i] {
-      get { return sheets[i]; }
-    }
-
-    // Recalculate from recalculation roots only, using their supported sets
-    public long Recalculate() {
-      // Now Cyclic != null or for all formulas f, f.state==Uptodate
-      if (Cyclic != null || CheckForModifiedSdf()) 
-        return RecalculateFullAfterSdfCheck();
-      else
-        return TimeRecalculation(delegate {
-          UseSupportSets = true;
-          // Requires for all formulas f, f.state==Uptodate
-          // Stage (1): Mark formulas reachable from roots, f.state=Dirty
-          SupportArea.IdempotentForeach = true;
-          foreach (FullCellAddr fca in volatileCells)
-            Cell.MarkCellDirty(fca.sheet, fca.ca.col, fca.ca.row);
-          foreach (FullCellAddr fca in editedCells)
-            Cell.MarkCellDirty(fca.sheet, fca.ca.col, fca.ca.row);
-          // Stage (2): Evaluate Dirty formulas (and Dirty cells they depend on)
-          awaitsEvaluation.Clear();
-          SupportArea.IdempotentForeach = true;
-          foreach (FullCellAddr fca in editedCells)
-            Cell.EnqueueCellForEvaluation(fca.sheet, fca.ca.col, fca.ca.row);
-          foreach (FullCellAddr fca in volatileCells)
-            Cell.EnqueueCellForEvaluation(fca.sheet, fca.ca.col, fca.ca.row);
-          while (awaitsEvaluation.Count > 0) 
-            awaitsEvaluation.Dequeue().Eval();
-        });
-    }
-
-    public void AddToQueue(Sheet sheet, int col, int row) {
-      awaitsEvaluation.Enqueue(new FullCellAddr(sheet, col, row));
-    }
-
-    public long RecalculateFull() {
-      CheckForModifiedSdf();
-      return RecalculateFullAfterSdfCheck();
-    }
-
-    // Unconditionally recalculate all cells a la Ctrl+Alt+F9
-    public long RecalculateFullAfterSdfCheck() {
-      return TimeRecalculation(delegate {
-        UseSupportSets = false;
-        ResetCellState();
-        // For all formulas f, f.state==Dirty
-        foreach (Sheet sheet in sheets)
-          sheet.RecalculateFull();
-      });
-    }
-
-    public long RecalculateFullRebuild() {
-      return TimeRecalculation(delegate {
-        UseSupportSets = false;
-        RebuildSupportGraph();  // Leaves all cells Dirty
-        foreach (Sheet sheet in sheets)
-          sheet.RecalculateFull(); 
-      });
-    }
-
-    // Timing, and handling of cyclic dependencies
-    private long TimeRecalculation(Action act) {
-      Cyclic = null;
-      RecalcCount++;
-      Stopwatch sw = new Stopwatch();
-      sw.Start();
-      try {
-        act();
-      } catch (Exception exn) {
-        ResetCellState();       // Mark all cells Dirty
-        if (exn is CyclicException)
-          Cyclic = exn as CyclicException;
-        else
-          Console.WriteLine("BAD: {0}", exn);
-      }
-      sw.Stop();
-      editedCells.Clear();
-      return sw.ElapsedMilliseconds;
-    }
-
-    private bool CheckForModifiedSdf() {
-      if (RecalcCount != 0) {
-        String[] modifiedFunctions = SdfManager.CheckForModifications(editedCells);
-        if (modifiedFunctions.Length != 0 && OnFunctionsAltered != null) {
-          OnFunctionsAltered(modifiedFunctions);
-          return true;
+        public Workbook()
+        {
+            RecalcCount = 0;
+            UseSupportSets = false;
+            SdfManager.ResetTables();
         }
-      }
-      return false;
-    }
 
-    private void ResetCellState() {
-      foreach (Sheet sheet in sheets)
-        sheet.ResetCellState();
-    }
+        public void AddSheet(Sheet sheet)
+        {
+            sheets.Add(sheet);
+        }
 
-    public void RebuildSupportGraph() {
-      Console.WriteLine("Rebuilding support graph");
-      foreach (Sheet sheet in this)
-        foreach (Cell cell in sheet)
-          cell.ResetSupportSet();
-      ResetCellState(); // Mark all cells Dirty ie. not Visited
-      foreach (Sheet sheet in this)
-        sheet.AddToSupportSets();
-      // Leaves all cells Dirty
-    }
+        public void RecordCellChange(int col, int row, Sheet sheet)
+        {
+            editedCells.Add(new FullCellAddr(sheet, col, row));
+        }
 
-    public void ResetVolatileSet() {
-      volatileCells.Clear();
-      foreach (Sheet sheet in this)
-        sheet.IncreaseVolatileSet();
-    }
+        public Sheet this[String name]
+        {
+            get
+            {
+                name = name.ToUpper();
+                foreach (Sheet sheet in sheets)
+                    if (sheet.Name.ToUpper() == name)
+                        return sheet;
+                return null;
+            }
+        }
 
-    public void IncreaseVolatileSet(Cell cell, Sheet sheet, int col, int row) {
-      if (cell != null && cell.IsVolatile)
-        volatileCells.Add(new FullCellAddr(sheet, col, row));
-    }
+        public Sheet this[int i]
+        {
+            get { return sheets[i]; }
+        }
 
-    public void DecreaseVolatileSet(Cell cell, Sheet sheet, int col, int row) {
-      Formula f = cell as Formula;
-      if (f != null)
-        volatileCells.Remove(new FullCellAddr(sheet, col, row));
-    }
+        // Recalculate from recalculation roots only, using their supported sets
+        public long Recalculate()
+        {
+            // Now Cyclic != null or for all formulas f, f.state==Uptodate
+            if (Cyclic != null || CheckForModifiedSdf())
+                return RecalculateFullAfterSdfCheck();
+            else
+                return TimeRecalculation(delegate
+                {
+                    UseSupportSets = true;
+                    // Requires for all formulas f, f.state==Uptodate
+                    // Stage (1): Mark formulas reachable from roots, f.state=Dirty
+                    SupportArea.IdempotentForeach = true;
+                    foreach (FullCellAddr fca in volatileCells)
+                        Cell.MarkCellDirty(fca.sheet, fca.ca.col, fca.ca.row);
+                    foreach (FullCellAddr fca in editedCells)
+                        Cell.MarkCellDirty(fca.sheet, fca.ca.col, fca.ca.row);
+                    // Stage (2): Evaluate Dirty formulas (and Dirty cells they depend on)
+                    awaitsEvaluation.Clear();
+                    SupportArea.IdempotentForeach = true;
+                    foreach (FullCellAddr fca in editedCells)
+                        Cell.EnqueueCellForEvaluation(fca.sheet, fca.ca.col, fca.ca.row);
+                    foreach (FullCellAddr fca in volatileCells)
+                        Cell.EnqueueCellForEvaluation(fca.sheet, fca.ca.col, fca.ca.row);
+                    while (awaitsEvaluation.Count > 0)
+                        awaitsEvaluation.Dequeue().Eval();
+                });
+        }
 
-    public int SheetCount {
-      get { return sheets.Count; }
-    }
+        public void AddToQueue(Sheet sheet, int col, int row)
+        {
+            awaitsEvaluation.Enqueue(new FullCellAddr(sheet, col, row));
+        }
 
-    IEnumerator<Sheet> IEnumerable<Sheet>.GetEnumerator() {
-      foreach (Sheet sheet in sheets)
-        yield return sheet;
-    }
+        public long RecalculateFull()
+        {
+            CheckForModifiedSdf();
+            return RecalculateFullAfterSdfCheck();
+        }
 
-    SC.IEnumerator SC.IEnumerable.GetEnumerator() {
-      foreach (Sheet sheet in sheets)
-        yield return sheet;
-    }
+        // Unconditionally recalculate all cells a la Ctrl+Alt+F9
+        public long RecalculateFullAfterSdfCheck()
+        {
+            return TimeRecalculation(delegate
+            {
+                UseSupportSets = false;
+                ResetCellState();
+                // For all formulas f, f.state==Dirty
+                foreach (Sheet sheet in sheets)
+                    sheet.RecalculateFull();
+            });
+        }
 
-    public void Clear() {
-      sheets.Clear();
-      editedCells.Clear();
-      volatileCells.Clear();
-      awaitsEvaluation.Clear();
+        public long RecalculateFullRebuild()
+        {
+            return TimeRecalculation(delegate
+            {
+                UseSupportSets = false;
+                RebuildSupportGraph();  // Leaves all cells Dirty
+                foreach (Sheet sheet in sheets)
+                    sheet.RecalculateFull();
+            });
+        }
+
+        // Timing, and handling of cyclic dependencies
+        private long TimeRecalculation(Action act)
+        {
+            Cyclic = null;
+            RecalcCount++;
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            try
+            {
+                act();
+            }
+            catch (Exception exn)
+            {
+                ResetCellState();       // Mark all cells Dirty
+                if (exn is CyclicException)
+                    Cyclic = exn as CyclicException;
+                else
+                    Console.WriteLine("BAD: {0}", exn);
+            }
+            sw.Stop();
+            editedCells.Clear();
+            return sw.ElapsedMilliseconds;
+        }
+
+        private bool CheckForModifiedSdf()
+        {
+            if (RecalcCount != 0)
+            {
+                String[] modifiedFunctions = SdfManager.CheckForModifications(editedCells);
+                if (modifiedFunctions.Length != 0 && OnFunctionsAltered != null)
+                {
+                    OnFunctionsAltered(modifiedFunctions);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void ResetCellState()
+        {
+            foreach (Sheet sheet in sheets)
+                sheet.ResetCellState();
+        }
+
+        public void RebuildSupportGraph()
+        {
+            Console.WriteLine("Rebuilding support graph");
+            foreach (Sheet sheet in this)
+                foreach (Cell cell in sheet)
+                    cell.ResetSupportSet();
+            ResetCellState(); // Mark all cells Dirty ie. not Visited
+            foreach (Sheet sheet in this)
+                sheet.AddToSupportSets();
+            // Leaves all cells Dirty
+        }
+
+        public void ResetVolatileSet()
+        {
+            volatileCells.Clear();
+            foreach (Sheet sheet in this)
+                sheet.IncreaseVolatileSet();
+        }
+
+        public void IncreaseVolatileSet(Cell cell, Sheet sheet, int col, int row)
+        {
+            if (cell != null && cell.IsVolatile)
+                volatileCells.Add(new FullCellAddr(sheet, col, row));
+        }
+
+        public void DecreaseVolatileSet(Cell cell, Sheet sheet, int col, int row)
+        {
+            Formula f = cell as Formula;
+            if (f != null)
+                volatileCells.Remove(new FullCellAddr(sheet, col, row));
+        }
+
+        public int SheetCount
+        {
+            get { return sheets.Count; }
+        }
+
+        IEnumerator<Sheet> IEnumerable<Sheet>.GetEnumerator()
+        {
+            foreach (Sheet sheet in sheets)
+                yield return sheet;
+        }
+
+        SC.IEnumerator SC.IEnumerable.GetEnumerator()
+        {
+            foreach (Sheet sheet in sheets)
+                yield return sheet;
+        }
+
+        public void Clear()
+        {
+            sheets.Clear();
+            editedCells.Clear();
+            volatileCells.Clear();
+            awaitsEvaluation.Clear();
+        }
     }
-  }
 }
