@@ -1,4 +1,4 @@
-﻿// Funcalc, spreadsheet with functions
+// Funcalc, spreadsheet with functions
 // ----------------------------------------------------------------------
 // Copyright (c) 2006-2014 Peter Sestoft and others
 

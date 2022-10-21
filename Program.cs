@@ -1,4 +1,4 @@
-﻿namespace Corecalc
+namespace Corecalc
 {
     public class Program
     {
