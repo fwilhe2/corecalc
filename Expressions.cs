@@ -267,6 +267,7 @@ class FunCall : Expr
 {
     public readonly Function function;   // Non-null
     public readonly Expr[] es;           // Non-null, elements non-null
+    private string v;
 
     private FunCall(String name, params Expr[] es)
       : this(Function.Get(name), es) { }
@@ -276,6 +277,11 @@ class FunCall : Expr
         // Assert: function != null, all es[i] != null
         this.function = function;
         this.es = es;
+    }
+
+    public FunCall(string v)
+    {
+        this.v = v;
     }
 
     public static Expr Make(String name, Expr[] es)
