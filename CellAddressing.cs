@@ -105,12 +105,12 @@ public struct CellAddr : IEquatable<CellAddr>
 
     public static bool operator ==(CellAddr ca1, CellAddr ca2)
     {
-        return ca1.col == ca2.col && ca1.row == ca2.col;
+        return ca1.col == ca2.col && ca1.row == ca2.row;
     }
 
     public static bool operator !=(CellAddr ca1, CellAddr ca2)
     {
-        return ca1.col != ca2.col || ca1.row != ca2.col;
+        return ca1.col != ca2.col || ca1.row != ca2.row;
     }
 
     public override String ToString()

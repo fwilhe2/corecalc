@@ -231,9 +231,12 @@ spreadsheet `Value`s and .NET types — including array types.
 
 ## 7. State of this port — gaps and rough edges
 
-### 7.1 Verified defect: `CellAddr.operator==` compares the wrong field
+### 7.1 Fixed defect: `CellAddr.operator==` compared the wrong field
 
-`CellAddressing.cs:106-114` — both operators compare `row` against the *other*
+*Fixed — recorded here because it explains why Funcalc appeared broken, and
+because §7.2 item 4 is the reason it survived this long.*
+
+`CellAddressing.cs:106-114` — both operators compared `row` against the *other*
 operand's `col`:
 
 ```csharp
@@ -244,32 +247,32 @@ public static bool operator !=(CellAddr ca1, CellAddr ca2)
 ```
 
 `Equals`/`GetHashCode` (`:91-99`) are correct, so dictionary and hash-set lookups
-— which is how the engine addresses cells nearly everywhere — are unaffected.
-Only the operators are wrong, and they are wrong in *both* directions:
+— which is how the engine addresses cells nearly everywhere — were unaffected.
+Only the operators were wrong, and they were wrong in *both* directions:
 
-| Comparison | `==` returns | Correct |
+| Comparison | `==` returned | Correct |
 |---|---|---|
 | `CellAddr(0,1) == CellAddr(0,1)` | `False` | `True` |
 | `CellAddr(1,1) == CellAddr(1,3)` (B2 vs B4) | `True` | `False` |
-| `CellAddr(3,3) == CellAddr(3,3)` | `True` | `True` (passes only because `col == row`) |
+| `CellAddr(3,3) == CellAddr(3,3)` | `True` | `True` (passed only because `col == row`) |
 
 `FullCellAddr.operator==` (`:171-179`) is itself written correctly but delegates
-to `ca1.ca == ca2.ca`, so it inherits the bug.
+to `ca1.ca == ca2.ca`, so it inherited the bug.
 
 **Reachable impact.** The only call sites that reach these operators are
 `Debug.Assert(sdfInfo.outputCell == dpGraph.outputCell)` (`ProgramLines.cs:75`)
 and `Debug.Assert(dpGraph.outputCell == cellList[cellList.Count-1])`
 (`ProgramLines.cs:103`). Everything else uses `Equals` or a hash container.
-Because asserts are compiled out in Release, the effect is:
+Because asserts are compiled out in Release, the effect was:
 
-- **Release** — no observable misbehaviour; Funcalc works.
+- **Release** — no observable misbehaviour; Funcalc worked.
 - **Debug** (the default for `dotnet build` / `dotnet run`) — `SdfManager.CreateFunction`
-  aborts the process with `Assertion failed: sdfInfo.outputCell == dpGraph.outputCell`
-  for **any SDF whose output cell has `col != row`**. Since a typical function
-  sheet puts the output in the same column a few rows down, this is essentially
-  *all* of them. The Funcalc half of the project is unusable in a Debug build.
+  aborted the process with `Assertion failed: sdfInfo.outputCell == dpGraph.outputCell`
+  for **any SDF whose output cell had `col != row`**. Since a typical function
+  sheet puts the output in the same column a few rows down, that was essentially
+  *all* of them: the Funcalc half of the project was unusable in a Debug build.
 
-The one-character fix is `ca2.col` → `ca2.row` in both operators.
+The fix was one character in each operator, `ca2.col` → `ca2.row`.
 
 ### 7.2 Other gaps
 
@@ -345,8 +348,7 @@ checked against a running build (.NET SDK 10.0.400 on Debian 13).
 | Interpretation | Correct. `A1=2, A2=3, A3=A1+A2, A4=A3*10, A5=SUM(A1:A2)` → `5, 50, 5` |
 | Minimal recalculation | Correct. `A1:=40` then `Recalculate()` → `A3=43, A4=430, A5=43` |
 | Cycle detection | Correct. `A6 = A6+1` → `### CYCLE in cell S1!A6 formula =S1!$A$6+1` |
-| Funcalc SDF compile + call | Correct **in Release**. `MYF(x) = IF(x>10; x*2; x+100)` → `MYF(5)=105`, `MYF(20)=40`; callable from an ordinary sheet |
-| Funcalc SDF compile **in Debug** | **Crashes** — see §7.1 |
+| Funcalc SDF compile + call | Correct in both Debug and Release once §7.1 was fixed. `MYF(x) = IF(x>10; x*2; x+100)` → `MYF(5)=105`, `MYF(20)=40`; callable from an ordinary sheet |
 
 The engine was exercised by compiling the repository's sources together with a
 driver program in a scratch project (formulas built as `Expr` trees, since §7.2
