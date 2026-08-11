@@ -287,11 +287,15 @@ These are findings, not upstream defects; they follow from what the port kept.
    the `IO` namespace referenced by the commented parser code is absent.
 3. **No GUI.** The WinForms front end is gone, which is what made the Linux port
    possible.
-4. **No tests.** CI (`.github/workflows/ci.yaml`) runs `dotnet test`, but the
-   repo contains no test project, so that step is a no-op — verified to exit 0
-   without discovering or running anything. It therefore cannot fail, which is
-   why §7.1 has gone unnoticed. There is also no solution file — just
-   `corecalc.csproj`.
+4. **Thin test coverage.** Until recently there was no test project at all, so
+   CI's `dotnet test` step exited 0 without discovering anything and could never
+   fail — which is how §7.1 survived. `tests/Corecalc.Tests` now covers cell
+   addressing, evaluation, minimal recalculation, cycle detection and SDF
+   compilation (23 tests), and `corecalc.sln` ties the two projects together so
+   CI picks both up. That is a smoke-test-grade suite, not real coverage: the
+   support-graph range algebra (`SupportArea`, `SupportRange`), row/column
+   insertion, array formulas, most of the 74 built-ins, `EXTERN`, partial
+   evaluation and `SPECIALIZE` are all still untested.
 5. **`SdfManager.ShowIL` (`SdfManager.cs:74`) is an empty method** — the IL
    dumper was dropped along with the GUI.
 6. **`Program.cs` double-registers its sheet** (confirmed by running it — the
@@ -342,7 +346,7 @@ checked against a running build (.NET SDK 10.0.400 on Debian 13).
 | Check | Result |
 |---|---|
 | `dotnet build` | Succeeds — 0 errors, 335 warnings (all nullable-analysis, per §7.2 item 7) |
-| `dotnet test` | Exits 0, runs nothing (no test project) |
+| `dotnet test` | 23 tests, all passing. Needs `DOTNET_ROLL_FORWARD=LatestMajor` locally for the reason in the next row |
 | `dotnet run` | Fails — `net6.0` runtime absent; only `Microsoft.NETCore.App 10.0.11` installed. Runs under `DOTNET_ROLL_FORWARD=LatestMajor` |
 | `net6.0` target | Out of support; SDK emits `NETSDK1138` |
 | Interpretation | Correct. `A1=2, A2=3, A3=A1+A2, A4=A3*10, A5=SUM(A1:A2)` → `5, 50, 5` |
@@ -350,6 +354,12 @@ checked against a running build (.NET SDK 10.0.400 on Debian 13).
 | Cycle detection | Correct. `A6 = A6+1` → `### CYCLE in cell S1!A6 formula =S1!$A$6+1` |
 | Funcalc SDF compile + call | Correct in both Debug and Release once §7.1 was fixed. `MYF(x) = IF(x>10; x*2; x+100)` → `MYF(5)=105`, `MYF(20)=40`; callable from an ordinary sheet |
 
-The engine was exercised by compiling the repository's sources together with a
-driver program in a scratch project (formulas built as `Expr` trees, since §7.2
-item 1 means they cannot be parsed from strings).
+The behavioural rows are now covered by `tests/Corecalc.Tests`, which builds
+formulas as `Expr` trees since §7.2 item 1 means they cannot be parsed from
+strings. Reverting the §7.1 fix turns 11 of the 23 tests red, including every
+SDF test, so the suite genuinely pins that behaviour down.
+
+Note that `Workbook`'s constructor calls `SdfManager.ResetTables()`, clearing
+process-wide static state shared by all sheet-defined functions. The test
+assembly therefore disables xUnit's parallelisation; any future test project
+must do the same.

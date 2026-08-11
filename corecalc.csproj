@@ -7,4 +7,17 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- This project sits at the repository root, so the SDK's default globs would
+         otherwise pull the test project's sources in as well. -->
+    <Compile Remove="tests/**" />
+    <None Remove="tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Formula, FunCall, CellRef and friends are internal, so the tests need
+         access to them to build expression trees (there is no formula parser). -->
+    <InternalsVisibleTo Include="Corecalc.Tests" />
+  </ItemGroup>
+
 </Project>
