@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A .NET 6 port of Peter Sestoft's **Corecalc** (an interpreted spreadsheet core) and
+A .NET port of Peter Sestoft's **Corecalc** (an interpreted spreadsheet core) and
 **Funcalc** (which compiles *sheet-defined functions* to .NET IL at runtime), from
 *Spreadsheet Implementation Technology* (MIT Press, 2014). Class names match the
 book's exactly; chapters 1–8 cover Corecalc, 9–14 Funcalc.
@@ -22,17 +22,9 @@ dotnet test --filter "FullyQualifiedName~SdfTests"                 # one class
 dotnet test --filter "FullyQualifiedName~SdfTests.CompiledFunctionHasExpectedMetadata"
 ```
 
-**Local gotcha:** the projects target `net6.0`, which is out of support. If only a
-newer runtime is installed, `dotnet test` and `dotnet run` fail with
-"You must install or update .NET". Prefix with `DOTNET_ROLL_FORWARD=LatestMajor`:
+Both projects target `net10.0`; CI (`.github/workflows/ci.yaml`) installs 10.0.x.
 
-```bash
-DOTNET_ROLL_FORWARD=LatestMajor dotnet test
-DOTNET_ROLL_FORWARD=LatestMajor dotnet run
-```
-
-CI (`.github/workflows/ci.yaml`) installs a real 6.0.x SDK and needs no such flag.
-Builds emit ~335 nullable warnings — `<Nullable>enable</Nullable>` is on but the
+Builds emit ~332 nullable warnings — `<Nullable>enable</Nullable>` is on but the
 2006-era code is not annotated. That is the baseline, not a regression.
 
 ## Architecture

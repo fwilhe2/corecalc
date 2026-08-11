@@ -2,7 +2,7 @@
 
 Findings from reading the source of this repository (~12,150 lines of C# across 19 files).
 
-This is a .NET 6 port of Peter Sestoft's **Corecalc** (an interpreted spreadsheet
+This is a .NET port of Peter Sestoft's **Corecalc** (an interpreted spreadsheet
 core) and **Funcalc** (an extension that compiles *sheet-defined functions* to
 .NET IL at runtime). The upstream project and the accompanying book,
 *Spreadsheet Implementation Technology* (MIT Press, 2014), are at
@@ -20,7 +20,7 @@ Two layers live side by side in one assembly:
 | **Funcalc** | `Corecalc.Funcalc` | `Funcalc/*.cs` | Turns a region of a *function sheet* into a compiled .NET delegate via `System.Reflection.Emit`, with partial evaluation, evaluation conditions, and unboxing optimisations. |
 
 The port's changes relative to upstream are cosmetic and platform-related:
-`net6.0`, nullable + implicit usings enabled, file-scoped namespaces, Unix line
+`net10.0`, nullable + implicit usings enabled, file-scoped namespaces, Unix line
 endings, and **the WinForms GUI and the Coco/R-generated formula parser have
 been dropped** (see §7). What remains is the engine plus a 22-line
 `Program.Main` smoke test.
@@ -345,10 +345,9 @@ checked against a running build (.NET SDK 10.0.400 on Debian 13).
 
 | Check | Result |
 |---|---|
-| `dotnet build` | Succeeds — 0 errors, 335 warnings (all nullable-analysis, per §7.2 item 7) |
-| `dotnet test` | 23 tests, all passing. Needs `DOTNET_ROLL_FORWARD=LatestMajor` locally for the reason in the next row |
-| `dotnet run` | Fails — `net6.0` runtime absent; only `Microsoft.NETCore.App 10.0.11` installed. Runs under `DOTNET_ROLL_FORWARD=LatestMajor` |
-| `net6.0` target | Out of support; SDK emits `NETSDK1138` |
+| `dotnet build` | Succeeds — 0 errors, 332 warnings (all nullable-analysis, per §7.2 item 7) |
+| `dotnet test` | 23 tests, all passing, in both Debug and Release |
+| `dotnet run` | Succeeds, printing the sample sheet twice (§7.2 item 6) |
 | Interpretation | Correct. `A1=2, A2=3, A3=A1+A2, A4=A3*10, A5=SUM(A1:A2)` → `5, 50, 5` |
 | Minimal recalculation | Correct. `A1:=40` then `Recalculate()` → `A3=43, A4=430, A5=43` |
 | Cycle detection | Correct. `A6 = A6+1` → `### CYCLE in cell S1!A6 formula =S1!$A$6+1` |
